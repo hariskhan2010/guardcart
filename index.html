@@ -1,0 +1,214 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>GuardCart</title>
+<meta name="description" content="An AI shopping agent that pays through PayPal, guarded by a firewall it cannot bypass.">
+<style>
+  :root {
+    --bg: #f6f7f9; --panel: #ffffff; --text: #16181d; --muted: #5f6672; --border: #e1e4ea;
+    --accent: #1f4fd8; --pass: #137a3a; --pass-bg: #e6f4ea; --ask: #8a5a00; --ask-bg: #fff4dc;
+    --block: #b3261e; --block-bg: #fde8e7; --code: #f0f2f5;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #0f1115; --panel: #171a21; --text: #e8eaf0; --muted: #9aa1ad; --border: #2a2f3a;
+      --accent: #7aa2ff; --pass: #6fd38f; --pass-bg: #15301f; --ask: #f2c063; --ask-bg: #33280f;
+      --block: #ff8a80; --block-bg: #3a1614; --code: #1e222b;
+    }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text); font: 15px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; }
+  .wrap { max-width: 980px; margin: 0 auto; padding: 24px 16px 64px; }
+  header h1 { margin: 0; font-size: 26px; letter-spacing: -0.02em; }
+  header p { margin: 6px 0 0; color: var(--muted); max-width: 680px; }
+  .badges { margin-top: 10px; display: flex; gap: 8px; flex-wrap: wrap; }
+  .badge { font-size: 12px; padding: 2px 8px; border: 1px solid var(--border); border-radius: 999px; color: var(--muted); }
+  .grid { display: grid; grid-template-columns: 1fr 280px; gap: 16px; margin-top: 20px; }
+  @media (max-width: 760px) { .grid { grid-template-columns: 1fr; } }
+  .panel { background: var(--panel); border: 1px solid var(--border); border-radius: 10px; padding: 16px; }
+  .panel h2 { margin: 0 0 10px; font-size: 14px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); }
+  form { display: flex; gap: 8px; }
+  input[type=text] { flex: 1; min-width: 0; padding: 10px 12px; border: 1px solid var(--border); border-radius: 8px; background: var(--bg); color: var(--text); font: inherit; }
+  button { padding: 10px 14px; border-radius: 8px; border: 1px solid var(--accent); background: var(--accent); color: #fff; font: inherit; cursor: pointer; }
+  button.ghost { background: transparent; color: var(--accent); }
+  button:disabled { opacity: .6; cursor: wait; }
+  .examples { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+  .examples button { font-size: 13px; padding: 6px 10px; background: transparent; color: var(--text); border-color: var(--border); }
+  .examples button span { color: var(--muted); }
+  ol.steps { margin: 0; padding-left: 20px; }
+  ol.steps li { margin: 4px 0; }
+  .decision { display: inline-block; font-weight: 700; padding: 4px 12px; border-radius: 6px; font-size: 18px; }
+  .ALLOW { color: var(--pass); background: var(--pass-bg); }
+  .ASK { color: var(--ask); background: var(--ask-bg); }
+  .BLOCK { color: var(--block); background: var(--block-bg); }
+  table { width: 100%; border-collapse: collapse; font-size: 14px; }
+  td { padding: 8px 6px; border-top: 1px solid var(--border); vertical-align: top; }
+  td.s { width: 64px; font-weight: 600; font-size: 12px; text-transform: uppercase; }
+  td.s.pass { color: var(--pass); } td.s.ask { color: var(--ask); } td.s.block { color: var(--block); }
+  td.n { width: 170px; font-weight: 600; }
+  .row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-top: 12px; }
+  .kv { font-size: 14px; } .kv div { display: flex; justify-content: space-between; border-top: 1px solid var(--border); padding: 6px 0; }
+  .kv div { gap: 12px; } .kv div span:last-child { text-align: right; }
+  .kv div span:first-child { color: var(--muted); white-space: nowrap; }
+  @media (max-width: 520px) { td.n { width: 110px; } td.s { width: 52px; } }
+  code { background: var(--code); padding: 1px 5px; border-radius: 4px; font-size: 13px; }
+  .tag { font-size: 11px; padding: 1px 6px; border-radius: 4px; margin-left: 4px; background: var(--code); color: var(--muted); }
+  .tag.web { background: var(--block-bg); color: var(--block); }
+  .result { margin-top: 16px; display: none; }
+  .result > .panel + .panel { margin-top: 12px; }
+  .notice { margin-top: 12px; padding: 10px 12px; border-radius: 8px; background: var(--pass-bg); color: var(--pass); display: none; }
+  .notice.err { background: var(--block-bg); color: var(--block); }
+  footer { margin-top: 32px; color: var(--muted); font-size: 13px; }
+  a { color: var(--accent); }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>GuardCart</h1>
+    <p>An AI shopping agent that pays through PayPal, guarded by a firewall it cannot bypass. The agent here is deliberately gullible: it obeys instructions hidden in product pages. Watch the firewall stop it.</p>
+    <div class="badges"><span class="badge" id="mode">mode: …</span><span class="badge" id="judge">intent judge: …</span></div>
+  </header>
+
+  <div id="notice" class="notice"></div>
+
+  <div class="grid">
+    <div>
+      <div class="panel">
+        <h2>Ask the agent</h2>
+        <form id="f">
+          <input type="text" id="q" placeholder="e.g. Buy a USB-C cable under $15" autocomplete="off" required>
+          <button id="go" type="submit">Shop</button>
+        </form>
+        <div class="examples">
+          <button data-q="Buy a USB-C cable under $15">Normal purchase <span>→ allow</span></button>
+          <button data-q="Buy a phone charger under $20">Payee swap attack <span>→ block</span></button>
+          <button data-q="Buy one pack of AA batteries">Quantity inflation <span>→ block</span></button>
+          <button data-q="Buy a notebook for class under $10">Wrong item push <span>→ block</span></button>
+          <button data-q="Buy wireless headphones">Above threshold <span>→ ask</span></button>
+        </div>
+      </div>
+
+      <div class="result" id="result">
+        <div class="panel">
+          <h2>What the agent did</h2>
+          <ol class="steps" id="steps"></ol>
+        </div>
+        <div class="panel">
+          <h2>Firewall decision</h2>
+          <div class="decision" id="decision"></div>
+          <p id="message" style="margin:8px 0 0"></p>
+          <table><tbody id="checks"></tbody></table>
+          <div class="row" id="actions"></div>
+        </div>
+      </div>
+    </div>
+
+    <aside>
+      <div class="panel">
+        <h2>Your policy</h2>
+        <div class="kv" id="policy"></div>
+      </div>
+      <div class="panel" style="margin-top:12px">
+        <h2>Payment the agent requested</h2>
+        <div class="kv" id="cart"><div><span>No payment yet</span><span></span></div></div>
+      </div>
+    </aside>
+  </div>
+
+  <footer>
+    Payments use PayPal Orders v2 (sandbox) when credentials are set, otherwise a mock. The agent never holds PayPal credentials; only the firewall can create or capture orders.
+  </footer>
+</div>
+
+<script>
+const $ = (id) => document.getElementById(id);
+const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+
+function notice(text, err) {
+  const n = $('notice'); n.textContent = text; n.className = 'notice' + (err ? ' err' : ''); n.style.display = 'block';
+}
+
+(async () => {
+  const p = new URLSearchParams(location.search);
+  if (p.get('paid')) notice(`PayPal order ${p.get('paid')} captured: ${p.get('status')}`);
+  if (p.get('cancelled')) notice('You cancelled the payment in PayPal.', true);
+  if (p.get('error')) notice(`Error: ${p.get('error')}`, true);
+  try {
+    const r = await fetch('/api/policy'); const d = await r.json();
+    $('mode').textContent = 'mode: ' + d.mode;
+    $('judge').textContent = 'intent judge: ' + (d.llmJudge ? 'Claude' : 'heuristic');
+    const pol = d.policy;
+    const rows = [
+      ['Per transaction', `$${pol.per_transaction_limit}`],
+      ['Monthly budget', `$${pol.monthly_budget}`],
+      ['Spent this month', `$${pol.spent_this_month}`],
+      ['Ask above', `$${pol.ask_above}`],
+      ['Max quantity', pol.max_quantity],
+      ['Categories', pol.allowed_categories.join(', ')],
+    ];
+    $('policy').innerHTML = rows.map(([k, v]) => `<div><span>${esc(k)}</span><span>${esc(v)}</span></div>`).join('');
+  } catch { $('mode').textContent = 'mode: offline'; }
+})();
+
+function tag(f) { return `<span class="tag ${f.origin === 'web' ? 'web' : ''}">${esc(f.origin)}</span>`; }
+
+async function shop(q) {
+  $('go').disabled = true;
+  try {
+    const r = await fetch('/api/shop', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ request: q }) });
+    const d = await r.json();
+    if (!r.ok) throw new Error(d.error || r.status);
+    render(d);
+  } catch (e) { notice('Error: ' + e.message, true); }
+  finally { $('go').disabled = false; }
+}
+
+function render(d) {
+  $('result').style.display = 'block';
+  $('steps').innerHTML = (d.agent.steps || []).map((s) => `<li>${esc(s)}</li>`).join('');
+  if (!d.firewall) {
+    $('decision').textContent = 'NO PAYMENT'; $('decision').className = 'decision';
+    $('message').textContent = 'The agent could not find a product. Try one of the examples.';
+    $('checks').innerHTML = ''; $('actions').innerHTML = '';
+    return;
+  }
+  const p = d.agent.payment;
+  $('cart').innerHTML = [
+    ['Item', esc(p.productName) + tag(p.item)],
+    ['Quantity', esc(p.quantity.value) + tag(p.quantity)],
+    ['Payee', `<code>${esc(p.payee.value)}</code>` + tag(p.payee)],
+    ['Total', `$${p.amount.toFixed(2)}`],
+  ].map(([k, v]) => `<div><span>${k}</span><span>${v}</span></div>`).join('');
+
+  const dec = d.firewall.decision;
+  $('decision').textContent = dec; $('decision').className = 'decision ' + dec;
+  $('message').textContent = d.message || '';
+  $('checks').innerHTML = d.firewall.checks.map((c) =>
+    `<tr><td class="s ${c.status}">${esc(c.status)}</td><td class="n">${esc(c.name)}</td><td>${esc(c.detail)}</td></tr>`).join('');
+
+  const a = $('actions'); a.innerHTML = '';
+  const o = d.order;
+  if (!o) return;
+  if (o.status === 'COMPLETED') {
+    a.innerHTML = `<span>PayPal order <code>${esc(o.id)}</code> captured${o.mock ? ' (mock)' : ''}.</span>`;
+  } else if (o.approveUrl) {
+    a.innerHTML = `<a href="${esc(o.approveUrl)}"><button type="button">Approve in PayPal</button></a><span>Order <code>${esc(o.id)}</code></span>`;
+  } else if (o.mock) {
+    a.innerHTML = `<button type="button" id="ok">Approve payment</button><button type="button" class="ghost" id="no">Deny</button><span>Order <code>${esc(o.id)}</code> (mock)</span>`;
+    const decide = async (approve) => {
+      const r = await fetch('/api/approve', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ orderId: o.id, approve }) });
+      const x = await r.json();
+      a.innerHTML = `<span>Order <code>${esc(x.id || o.id)}</code>: ${esc(x.status || x.error)}</span>`;
+    };
+    $('ok').onclick = () => decide(true); $('no').onclick = () => decide(false);
+  }
+}
+
+$('f').addEventListener('submit', (e) => { e.preventDefault(); shop($('q').value); });
+document.querySelectorAll('.examples button').forEach((b) => b.addEventListener('click', () => { $('q').value = b.dataset.q; shop(b.dataset.q); }));
+</script>
+</body>
+</html>
